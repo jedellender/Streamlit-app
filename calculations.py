@@ -104,3 +104,65 @@ def display_price_chart(prices_df, title="Price Overlay"):
         )
     
     st.plotly_chart(fig, use_container_width=True, config=config)
+
+
+
+
+
+
+
+def display_price_metrics(prices_df, ticker):
+    """
+    Display current price and daily change metrics for a specific ticker.
+    
+    Args:
+        prices_df (pd.DataFrame): DataFrame with datetime index and ticker columns
+        ticker (str): Ticker symbol to display metrics for
+    """
+    if prices_df.empty or ticker not in prices_df.columns:
+        st.warning(f"No data available for {ticker}")
+        return
+    
+    # Get latest and previous day prices
+    ticker_data = prices_df[ticker].dropna()
+    if len(ticker_data) < 2:
+        st.warning(f"Insufficient data for {ticker}")
+        return
+    
+    current_price = ticker_data.iloc[-1]
+    previous_price = ticker_data.iloc[-2]
+    
+    # Calculate daily change
+    daily_change = current_price - previous_price
+    daily_change_pct = (daily_change / previous_price) * 100
+    
+    # Create columns for metrics
+    col1, col2 = st.columns([1, 1])
+    
+    with col1:
+        st.metric(
+            label=f'{ticker} Price',
+            value=f'${current_price:.2f}',
+            delta=f'{daily_change:+.2f}'
+        )
+    
+    with col2:
+        st.metric(
+            label='Daily Change %',
+            value=f'{daily_change_pct:+.2f}%'
+        )
+
+# Usage example:
+# prices_df, infos_df, current_prices = fetch_data(['AAPL', 'MSFT'])
+# display_price_metrics(prices_df, 'AAPL')
+
+# Or for multiple tickers:
+def display_all_price_metrics(prices_df):
+    """Display metrics for all tickers in the dataframe."""
+    for ticker in prices_df.columns:
+        st.subheader(f"{ticker} Metrics")
+        display_price_metrics(prices_df, ticker)
+        st.divider()
+
+# Usage:
+# display_all_price_metrics(prices_df)

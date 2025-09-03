@@ -46,7 +46,7 @@ def fetch_data(tickers):
     infos_df = pd.DataFrame(infos).T
     current_prices = pd.DataFrame.from_dict(latest_price, orient='index')
 
-    st.dataframe(current_prices)
+    
     return prices_df, infos_df, current_prices
 
 
@@ -94,11 +94,11 @@ def get_clean_options(options_df, current_prices):
     c_df = options_df.copy()
 
     c_df['current_price'] = c_df['ticker'].map(dict(current_prices['price']))
-
+    c_df['days_to_expiry'] = (pd.to_datetime(c_df['expirationDate']) - pd.Timestamp.now()).dt.days
     # Convert expiration dates to datetime if they're strings
     if c_df['expirationDate'].dtype == 'object':
         c_df['expirationDate'] = pd.to_datetime(c_df['expirationDate'])
-
+    
     # Calculate time to expiration in years
     today = pd.Timestamp.now()
     c_df['time_to_expiry'] = (c_df['expirationDate'] - today).dt.days / 365.0
