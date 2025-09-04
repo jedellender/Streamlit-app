@@ -1,45 +1,39 @@
-import psycopg2
 import pandas as pd
 import streamlit as st
 from datetime import datetime
-
+from sqlalchemy import create_engine, text
 
 def get_connection():
-    if "DATABASE_URL" in st.secrets:
-        return psycopg2.connect(st.secrets["DATABASE_URL"])
-
+    DATABASE_URL = st.secrets["DATABASE_URL"]
+    engine = create_engine(DATABASE_URL)
+    return engine
 
 def init_db():
     """Create table if needed"""
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS options_cache (
-                id SERIAL PRIMARY KEY,
-                ticker VARCHAR(10),
-                option_type VARCHAR(10),
-                strike FLOAT,
-                expiration_date DATE,
-                last_price FLOAT,
-                volume INT,
-                open_interest INT,
-                implied_volatility FLOAT,
-                bid FLOAT,
-                ask FLOAT,
-                change_price FLOAT,
-                percent_change FLOAT,
-                in_the_money BOOLEAN,
-                contract_symbol VARCHAR(50),
-                last_trade_date TIMESTAMP,
-                stored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        conn.commit()
-        cursor.close()
-        conn.close()
+        engine = get_connection()
+        with engine.begin() as conn:  # automatically commits
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS options_cache (
+                    id SERIAL PRIMARY KEY,
+                    ticker VARCHAR(10),
+                    option_type VARCHAR(10),
+                    strike FLOAT,
+                    expiration_date DATE,
+                    last_price FLOAT,
+                    volume INT,
+                    open_interest INT,
+                    implied_volatility FLOAT,
+                    bid FLOAT,
+                    ask FLOAT,
+                    change_price FLOAT,
+                    percent_change FLOAT,
+                    in_the_money BOOLEAN,
+                    contract_symbol VARCHAR(50),
+                    last_trade_date TIMESTAMP,
+                    stored_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
         print("✅ Database ready")
     except Exception as e:
         print(f"Database init error (might be ok): {e}")
