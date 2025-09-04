@@ -3,9 +3,8 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import nltk
 from scipy.stats import norm
-import seaborn
+
 
 # import functions 
 from data_fetcher import fetch_options_data, get_clean_options, fetch_data
