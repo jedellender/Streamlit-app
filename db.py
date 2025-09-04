@@ -3,16 +3,11 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-# Put your Supabase connection string here for now (we'll secure it later)
-DATABASE_URL = "postgresql://postgres:[YOUR-PASSWORD]@db.xxxx.supabase.co:5432/postgres"
 
 def get_connection():
-    """Get database connection"""
-    # Try Streamlit secrets first (for deployed app)
     if "DATABASE_URL" in st.secrets:
         return psycopg2.connect(st.secrets["DATABASE_URL"])
-    # Otherwise use the hardcoded URL (for testing)
-    return psycopg2.connect(DATABASE_URL)
+
 
 def init_db():
     """Create table if needed"""
