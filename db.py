@@ -53,6 +53,10 @@ def save_options(options_df):
                 conn.execute(
                     text("DELETE FROM options_cache WHERE ticker = :ticker"),
                     {"ticker": ticker}
+
+                # insert new rows
+                conn.execute(text("INSERT INTO options_cache (...) VALUES (...)"), {...})
+                
                 )
 
             # Insert new rows
