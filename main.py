@@ -139,60 +139,100 @@ import pandas as pd
 import yfinance as yf
 from db import get_connection, save_options, load_options, init_db
 
+
+########### TEST
 st.title("🔧 Database Functional Test")
 
 # Make sure table exists
 init_db()
 
-engine = get_connection()
 
-# --- 1️⃣ Enter ticker ---
-test_ticker = st.text_input("Enter a ticker to test save/load:", "AAPL")
+import streamlit as st
+from sqlalchemy import text  # Add this import at the top with other imports
+from db import get_connection, save_options, load_options, init_db, test_connection
 
-# --- 2️⃣ Fetch & Save ---
-if st.button("Fetch and Save Options"):
-    with st.spinner(f"Fetching {test_ticker} options..."):
-        try:
-            ticker = yf.Ticker(test_ticker)
-            if ticker.options:
-                exp_date = ticker.options[0]
-                opt_chain = ticker.option_chain(exp_date)
+# Database Testing Section
+st.sidebar.divider()
+st.sidebar.subheader("🔧 Database Tools")
 
-                # First 5 calls only
-                df = opt_chain.calls.head(5).copy()
-                df['ticker'] = test_ticker
-                df['optionType'] = 'Call'
-                df['expirationDate'] = exp_date
-
-                st.write("Sample data to save:")
-                st.dataframe(df[['strike', 'lastPrice', 'volume']])
-
-                save_options(df)
-                st.success(f"✅ Saved {len(df)} options for {test_ticker}")
-            else:
-                st.warning(f"No options found for {test_ticker}")
-        except Exception as e:
-            st.error(f"❌ Error fetching/saving: {e}")
-
-# --- 3️⃣ Load & Verify ---
-if st.button("Load Options from DB"):
-    try:
-        loaded_df = load_options([test_ticker])
-        if not loaded_df.empty:
-            st.success(f"✅ Loaded {len(loaded_df)} records for {test_ticker}")
-            st.dataframe(loaded_df[['ticker','strike','lastPrice','volume','stored_at']])
+# Quick connection test
+if st.sidebar.button("Test DB Connection"):
+    with st.spinner("Testing database..."):
+        if test_connection():
+            st.sidebar.success("✅ Database working")
         else:
-            st.warning("No data found in DB yet. Try saving first!")
+            st.sidebar.error("❌ Database issue")
+
+# Show cached data info
+if st.sidebar.button("Show Cached Data"):
+    try:
+        engine = get_connection()
+        with engine.connect() as conn:
+            # Get summary
+            result = conn.execute(text("""
+                SELECT 
+                    ticker,
+                    COUNT(*) as options_count,
+                    MIN(expiration_date) as nearest_expiry,
+                    MAX(expiration_date) as furthest_expiry,
+                    MAX(stored_at) as last_updated
+                FROM options_cache
+                GROUP BY ticker
+                ORDER BY ticker
+            """))
+            
+            summary = pd.DataFrame(result.fetchall(), 
+                                 columns=['Ticker', 'Options Count', 'Nearest Expiry', 
+                                         'Furthest Expiry', 'Last Updated'])
+            
+            if not summary.empty:
+                st.sidebar.dataframe(summary)
+            else:
+                st.sidebar.info("No cached data")
     except Exception as e:
-        st.error(f"❌ Error loading data: {e}")
+        st.sidebar.error(f"Error: {e}")
 
-# --- 4️⃣ Cleanup (optional) ---
-if st.button("Clear Test Data"):
-    with st.spinner("Clearing test data..."):
+# Force cache refresh
+if st.sidebar.button("🔄 Force Refresh Cache"):
+    # Clear cache
+    st.cache_data.clear()
+    st.rerun()
+
+# Manual database operations (only show in debug mode)
+debug_mode = st.sidebar.checkbox("Debug Mode", value=False)
+
+if debug_mode:
+    st.sidebar.divider()
+    st.sidebar.write("### Debug Operations")
+    
+    # Clear specific ticker
+    ticker_to_clear = st.sidebar.text_input("Clear ticker from DB:")
+    if st.sidebar.button("Clear Ticker") and ticker_to_clear:
         try:
+            engine = get_connection()
             with engine.begin() as conn:
-                conn.execute("DELETE FROM options_cache WHERE ticker = :t", {"t": test_ticker})
-            st.success(f"✅ Cleared data for {test_ticker}")
+                result = conn.execute(
+                    text("DELETE FROM options_cache WHERE ticker = :ticker"),
+                    {"ticker": ticker_to_clear.upper()}
+                )
+                st.sidebar.success(f"Cleared {result.rowcount} rows for {ticker_to_clear}")
         except Exception as e:
-            st.error(f"❌ Error clearing data: {e}")
+            st.sidebar.error(f"Error: {e}")
+    
+    # Show recent errors
+    if st.sidebar.button("Show DB Schema"):
+        try:
+            engine = get_connection()
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT column_name, data_type, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_name = 'options_cache'
+                    ORDER BY ordinal_position
+                """))
+                schema = pd.DataFrame(result.fetchall(), 
+                                    columns=['Column', 'Type', 'Nullable'])
+                st.sidebar.dataframe(schema)
 
+        except Exception as e:
+            st.sidebar.error(f"Error: {e}")
