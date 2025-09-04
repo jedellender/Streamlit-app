@@ -131,7 +131,3 @@ if surface_fig is not None:
     #         )
 else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
-
-
-from db import init_db
-init_db()  # Creates everything
