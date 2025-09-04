@@ -28,6 +28,7 @@ returns = price_df.pct_change().dropna()
 # set dataframe with options data
 options_df = fetch_options_data(tickers) 
 clean_options_df = get_clean_options(options_df, current_prices)
+save_options(options_df)  # Save fetched options to the database
 
 # Compute Beta ( default is spy)
 if benchmark_symbol:
