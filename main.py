@@ -149,7 +149,7 @@ init_db()
 
 import streamlit as st
 from sqlalchemy import text  # Add this import at the top with other imports
-from db import get_connection, save_options, load_options, init_db, test_connection
+from db import get_connection, save_options, init_db, test_connection
 
 # Database Testing Section
 st.sidebar.divider()
