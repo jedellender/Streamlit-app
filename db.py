@@ -42,11 +42,9 @@ def save_options(options_df):
     """Save options data using SQLAlchemy"""
     if options_df.empty:
         return 
-
+    engine = get_connection()
+    tickers = options_df['ticker'].unique()
     try:
-        engine = get_connection()
-        tickers = options_df['ticker'].unique()
-
         with engine.begin() as conn:  # handles commit automatically
             # Clear old data per ticker
             for ticker in tickers:
