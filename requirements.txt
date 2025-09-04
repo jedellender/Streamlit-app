@@ -7,4 +7,4 @@ scipy
 psycopg2-binary
 datetime
 matplotlib
-sqlacademy
+sqlalchemy
