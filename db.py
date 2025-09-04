@@ -41,7 +41,7 @@ def init_db():
 def save_options(options_df):
     """Save options data using SQLAlchemy"""
     if options_df.empty:
-        return
+        return 
 
     try:
         engine = get_connection()
@@ -53,12 +53,8 @@ def save_options(options_df):
                 conn.execute(
                     text("DELETE FROM options_cache WHERE ticker = :ticker"),
                     {"ticker": ticker}
-
-                # insert new rows
-                conn.execute(text("INSERT INTO options_cache (...) VALUES (...)"), {...})
-                
                 )
-
+    
             # Insert new rows
             for _, row in options_df.iterrows():
                 conn.execute(
