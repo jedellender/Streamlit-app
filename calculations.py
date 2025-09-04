@@ -63,7 +63,7 @@ def compute_greeks(clean_options_df, risk_free_rate=0.04): # function to compute
     return df_reordered
 
 
-def display_price_chart(prices_df, title="Price Overlay"):
+def display_price_chart(prices_df):
     """
     Display a simple Plotly time series chart with clean x-axis.
     
@@ -71,7 +71,7 @@ def display_price_chart(prices_df, title="Price Overlay"):
         prices_df (pd.DataFrame): DataFrame with datetime index and ticker columns
         title (str): Chart title
     """
-    st.subheader(title)
+
     
     if prices_df.empty:
         st.warning("No price data available.")
@@ -151,18 +151,3 @@ def display_price_metrics(prices_df, ticker):
             label='Daily Change %',
             value=f'{daily_change_pct:+.2f}%'
         )
-
-# Usage example:
-# prices_df, infos_df, current_prices = fetch_data(['AAPL', 'MSFT'])
-# display_price_metrics(prices_df, 'AAPL')
-
-# Or for multiple tickers:
-def display_all_price_metrics(prices_df):
-    """Display metrics for all tickers in the dataframe."""
-    for ticker in prices_df.columns:
-        st.subheader(f"{ticker} Metrics")
-        display_price_metrics(prices_df, ticker)
-        st.divider()
-
-# Usage:
-# display_all_price_metrics(prices_df)

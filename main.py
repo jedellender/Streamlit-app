@@ -9,8 +9,8 @@ import seaborn
 
 # import functions 
 from data_fetcher import fetch_options_data, get_clean_options, fetch_data
-from calculations import compute_greeks, display_price_chart, display_price_metrics, display_all_price_metrics
-from iv_plotting import plot_3d_copula
+from calculations import compute_greeks, display_price_chart, display_price_metrics
+from iv_plotting import create_vol_surface_from_real_data, display_vol_surface_metrics
 
 st.set_page_config(page_title="Compact Multi-Ticker Dashboard", layout="wide")
 st.sidebar.title("Inputs")
@@ -61,9 +61,10 @@ with col2:
     st.dataframe(corr,width=400)
 
 # display chart
-on = st.toggle("Toggle chart")
+st.subheader('Historical equities ')
+on = st.toggle("Toggle chart", key='price_chart', value=True)
 if on:
-    display_price_chart(price_df, 'Equities historical price')
+    display_price_chart(price_df)
 
 
 # choose equity for options datra
@@ -71,21 +72,18 @@ col1, col2 = st.columns([1,1])
 with col2:
     selected_ticker = st.selectbox("Select ticker:", tickers )#, label_visibility="collapsed")
 with col1:
-    st.subheader(f"{selected_ticker} Data and options options chain")
+    st.subheader(f"{selected_ticker} options chain")
 
-#display_all_price_metrics(price_df)
+
 
 # display daily metrics 
 
-# col1, col2 = st.columns([1,1])
-# with col2:
-#prices_df, infos_df, current_prices = fetch_data(['AAPL', 'MSFT'])
 display_price_metrics(price_df, selected_ticker)
 
-# format and display options/greeks 
+
+# format options data
 greeks_df = compute_greeks(clean_options_df) 
 filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
-
 formatted_df = filtered_df.style.format({
     "expirationDate": lambda x: x.strftime('%d/%m/%y') if pd.notna(x) else "",
     "strike": "${:.2f}",
@@ -102,17 +100,39 @@ formatted_df = filtered_df.style.format({
     "moneyness": "{:.3f}",
     "intrinsic_value":"{:.2f}"
 })
-st.dataframe(formatted_df)
+
+
+# toggle display options data
+with st.expander("Toggle options data"):
+        if formatted_df is not None:
+            st.dataframe(
+                formatted_df, 
+                use_container_width=True,
+            )
+        else:
+            st.info("No options data available for the selected ticker.")
 
 
 
 # vol surface
-
 st.subheader('Volatility Surface')
 
+surface_fig, market_data = create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices)
 
-fig_3d = plot_3d_copula(filtered_df, 'impliedVolatility', 'Call')
-if fig_3d:
-    st.pyplot(fig_3d)
-else: 
-    st.error('insufficient data')
+if surface_fig is not None:
+    display_vol_surface_metrics(market_data, current_prices.get(selected_ticker, 100))
+    st.plotly_chart(surface_fig, use_container_width=True)
+    
+    # Optional: Show sample of the data used
+    # with st.expander("📊 Data Used for Surface"):
+    #     if market_data is not None:
+    #         st.dataframe(
+    #             market_data.head(10).round(4), 
+    #             use_container_width=True
+    #         )
+else:
+    st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
+
+
+from db import init_db
+init_db()  # Creates everything

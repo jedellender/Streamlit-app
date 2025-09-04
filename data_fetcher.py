@@ -9,6 +9,10 @@ import numpy as np
 from datetime import date, timedelta
 import datetime as dt
 
+# import local modules
+from db import save_options, load_options
+
+
 # Fetch Data including current price
 @st.cache_data(ttl=300)
 def fetch_data(tickers):
@@ -37,17 +41,17 @@ def fetch_data(tickers):
                         
         except Exception as e:
             print(f"Failed to fetch data for {t}. Reason: {e}")
-            prices[t] = pd.Series()  #  Empty series on failure
-            infos[t] = {} # Empty info on failure
-            latest_price[t] = np.nan
+            prices[t] = pd.Series()  
+            infos[t] = {}
+            latest_price[t] ={"price": np.nan, "time": None}
 
     # Create DataFrames from the dictionaries and return them
     prices_df = pd.DataFrame(prices)
     infos_df = pd.DataFrame(infos).T
     current_prices = pd.DataFrame.from_dict(latest_price, orient='index')
 
-    
     return prices_df, infos_df, current_prices
+
 
 
 @st.cache_data(ttl=900)
@@ -85,7 +89,18 @@ def fetch_options_data(tickers): # function to process options data
         combined_df = pd.concat(all_options, ignore_index=True)
         return combined_df
     else:
+        # No data from yfinance, try loading from database
+        print("No data from yfinance, checking database...")
+        try:
+            db_df = load_options(tickers)
+            if not db_df.empty:
+                print(f"Loaded {len(db_df)} options from database")
+                return db_df
+        except Exception as e:
+            print(f"Failed to load from database: {e}")
+        
         return pd.DataFrame()
+
 
 
 @st.cache_data(ttl=300)
