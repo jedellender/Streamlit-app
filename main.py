@@ -60,10 +60,11 @@ with col2:
     st.dataframe(corr,width=400)
 
 # display chart
-st.subheader('Historical equities ')
-on = st.toggle("Toggle chart", key='price_chart', value=True)
-if on:
-    display_price_chart(price_df)
+with st.expander(label='Toggle chart', expanded=True):
+    if not price_df.empty:
+        display_price_chart(price_df)
+    else:
+        st.info("No price data available.")
 
 
 # choose equity for options datra
@@ -72,7 +73,6 @@ with col2:
     selected_ticker = st.selectbox("Select ticker:", tickers )#, label_visibility="collapsed")
 with col1:
     st.subheader(f"{selected_ticker} options chain")
-
 
 
 # display daily metrics 

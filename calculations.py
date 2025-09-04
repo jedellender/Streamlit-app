@@ -145,9 +145,23 @@ def display_price_metrics(prices_df, ticker):
             value=f'${current_price:.2f}',
             delta=f'{daily_change:+.2f}'
         )
-    
-    with col2:
-        st.metric(
-            label='Daily Change %',
-            value=f'{daily_change_pct:+.2f}%'
-        )
+
+    st.markdown(
+    """
+    <style>
+    [data-testid="stMetricValue"] {
+        font-size: 32px;  /* adjust */
+    }
+    [data-testid="stMetricDelta"] {
+        font-size: 16px;  /* adjust */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+    col2.metric(
+        label="Daily Change %",
+        value="", 
+        delta=f"{daily_change_pct:+.2f}%"
+    )
