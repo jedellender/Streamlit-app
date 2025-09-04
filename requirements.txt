@@ -5,4 +5,5 @@ numpy
 plotly
 scipy
 psycopg2-binary
-datetime 
+datetime
+matplotlib
