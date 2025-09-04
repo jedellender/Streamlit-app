@@ -133,91 +133,97 @@ else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
 
+
+
+### temp Database testing page ###
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 from db import get_connection, init_db, save_options, load_options
 import yfinance as yf
 
+import streamlit as st
+import pandas as pd
+import yfinance as yf
+from sqlalchemy import text
+from db import get_connection, init_db, save_options, load_options
+
 def test_database_page():
-    """Add this to your main app.py or run as standalone test"""
+    """Database Test Page compatible with SQLAlchemy and Streamlit Cloud"""
     
     st.title("🔧 Database Test Page")
     
-    # Test 1: Connection
+    engine = get_connection()
+
+    # ------------------------------
+    # 1️⃣ Test Connection
+    # ------------------------------
     st.header("1️⃣ Test Connection")
     if st.button("Test Database Connection"):
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT version()")
-            version = cursor.fetchone()[0]
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT version()"))
+                version = result.fetchone()[0]
             st.success(f"✅ Connected! PostgreSQL version: {version}")
-            cursor.close()
-            conn.close()
         except Exception as e:
             st.error(f"❌ Connection failed: {e}")
     
-    # Test 2: Check Table
+    # ------------------------------
+    # 2️⃣ Check Table
+    # ------------------------------
     st.header("2️⃣ Check Table")
     if st.button("Check if table exists"):
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'options_cache'
-                )
-            """)
-            exists = cursor.fetchone()[0]
-            if exists:
-                st.success("✅ Table 'options_cache' exists!")
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = 'options_cache'
+                    )
+                """))
+                exists = result.fetchone()[0]
                 
-                # Count records
-                cursor.execute("SELECT COUNT(*) FROM options_cache")
-                count = cursor.fetchone()[0]
-                st.info(f"📊 Total records in database: {count}")
-                
-                # Show unique tickers
-                cursor.execute("SELECT DISTINCT ticker FROM options_cache")
-                tickers = cursor.fetchall()
-                if tickers:
-                    st.write("Tickers in database:", [t[0] for t in tickers])
-            else:
-                st.warning("Table doesn't exist, creating...")
-                init_db()
-                st.success("✅ Table created!")
-            
-            cursor.close()
-            conn.close()
+                if exists:
+                    st.success("✅ Table 'options_cache' exists!")
+                    
+                    # Count records
+                    count = conn.execute(text("SELECT COUNT(*) FROM options_cache")).scalar()
+                    st.info(f"📊 Total records in database: {count}")
+                    
+                    # Show unique tickers
+                    tickers = conn.execute(text("SELECT DISTINCT ticker FROM options_cache")).fetchall()
+                    if tickers:
+                        st.write("Tickers in database:", [t[0] for t in tickers])
+                else:
+                    st.warning("Table doesn't exist, creating...")
+                    init_db()
+                    st.success("✅ Table created!")
         except Exception as e:
             st.error(f"❌ Error: {e}")
     
-    # Test 3: Save Test Data
+    # ------------------------------
+    # 3️⃣ Save Test Data
+    # ------------------------------
     st.header("3️⃣ Test Save Data")
     test_ticker = st.text_input("Enter a ticker to test save:", "AAPL")
     
     if st.button("Fetch and Save Options"):
         with st.spinner(f"Fetching {test_ticker} options..."):
             try:
-                # Fetch real data
                 ticker = yf.Ticker(test_ticker)
                 if ticker.options:
                     exp_date = ticker.options[0]
                     opt_chain = ticker.option_chain(exp_date)
                     
-                    # Get first 5 calls as test
+                    # First 5 calls
                     test_df = opt_chain.calls.head(5).copy()
                     test_df['ticker'] = test_ticker
                     test_df['optionType'] = 'Call'
                     test_df['expirationDate'] = exp_date
                     
-                    # Show what we're saving
                     st.write("Sample data to save:")
                     st.dataframe(test_df[['strike', 'lastPrice', 'volume']].head())
                     
-                    # Save it
                     save_options(test_df)
                     st.success(f"✅ Saved {len(test_df)} options for {test_ticker}")
                 else:
@@ -225,26 +231,19 @@ def test_database_page():
             except Exception as e:
                 st.error(f"❌ Error: {e}")
     
-    # Test 4: Load Data
+    # ------------------------------
+    # 4️⃣ Load Data
+    # ------------------------------
     st.header("4️⃣ Test Load Data")
     if st.button("Load All Data from Database"):
         try:
-            # Get all tickers in database
-            conn = get_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT DISTINCT ticker FROM options_cache")
-            tickers = [t[0] for t in cursor.fetchall()]
-            cursor.close()
-            conn.close()
-            
+            tickers = [t[0] for t in engine.connect().execute(text("SELECT DISTINCT ticker FROM options_cache")).fetchall()]
             if tickers:
                 st.write(f"Loading data for: {tickers}")
                 df = load_options(tickers)
                 
                 if not df.empty:
                     st.success(f"✅ Loaded {len(df)} records")
-                    
-                    # Show summary
                     col1, col2, col3 = st.columns(3)
                     with col1:
                         st.metric("Total Records", len(df))
@@ -252,80 +251,59 @@ def test_database_page():
                         st.metric("Unique Tickers", df['ticker'].nunique())
                     with col3:
                         st.metric("Expiration Dates", df['expirationDate'].nunique())
-                    
-                    # Show sample data
                     st.write("Sample loaded data:")
                     st.dataframe(df[['ticker', 'strike', 'lastPrice', 'volume', 'stored_at']].head(10))
                 else:
                     st.warning("Database returned no data")
             else:
                 st.info("No data in database yet. Try saving some first!")
-                
         except Exception as e:
             st.error(f"❌ Error loading: {e}")
     
-    # Test 5: Live Status
+    # ------------------------------
+    # 5️⃣ Database Status
+    # ------------------------------
     st.header("5️⃣ Database Status")
     if st.button("Get Database Stats"):
         try:
-            conn = get_connection()
-            cursor = conn.cursor()
-            
-            # Get stats
-            cursor.execute("""
-                SELECT 
-                    COUNT(*) as total_records,
-                    COUNT(DISTINCT ticker) as unique_tickers,
-                    MIN(stored_at) as oldest_record,
-                    MAX(stored_at) as newest_record
-                FROM options_cache
-            """)
-            stats = cursor.fetchone()
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Total Records", stats[0])
-                st.metric("Unique Tickers", stats[1])
-            with col2:
-                if stats[2]:
-                    st.metric("Oldest Record", stats[2].strftime("%Y-%m-%d %H:%M"))
-                    st.metric("Newest Record", stats[3].strftime("%Y-%m-%d %H:%M"))
-            
-            # Database size (Supabase specific)
-            cursor.execute("SELECT pg_database_size(current_database())/1024/1024 as size_mb")
-            size = cursor.fetchone()[0]
-            st.info(f"📦 Database size: {size:.2f} MB / 500 MB (free limit)")
-            
-            cursor.close()
-            conn.close()
+            with engine.connect() as conn:
+                stats = conn.execute(text("""
+                    SELECT 
+                        COUNT(*) as total_records,
+                        COUNT(DISTINCT ticker) as unique_tickers,
+                        MIN(stored_at) as oldest_record,
+                        MAX(stored_at) as newest_record
+                    FROM options_cache
+                """)).fetchone()
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Total Records", stats[0])
+                    st.metric("Unique Tickers", stats[1])
+                with col2:
+                    if stats[2]:
+                        st.metric("Oldest Record", stats[2].strftime("%Y-%m-%d %H:%M"))
+                        st.metric("Newest Record", stats[3].strftime("%Y-%m-%d %H:%M"))
+                
+                size = conn.execute(text("SELECT pg_database_size(current_database())/1024/1024 as size_mb")).scalar()
+                st.info(f"📦 Database size: {size:.2f} MB / 500 MB (free limit)")
         except Exception as e:
             st.error(f"❌ Error: {e}")
     
-    # Quick cleanup option
+    # ------------------------------
+    # Cleanup
+    # ------------------------------
     st.header("🧹 Cleanup")
     if st.button("Clear All Data", type="secondary"):
         if st.checkbox("I'm sure - delete everything"):
             try:
-                conn = get_connection()
-                cursor = conn.cursor()
-                cursor.execute("TRUNCATE TABLE options_cache")
-                conn.commit()
+                with engine.begin() as conn:
+                    conn.execute(text("TRUNCATE TABLE options_cache"))
                 st.success("✅ All data cleared")
-                cursor.close()
-                conn.close()
             except Exception as e:
                 st.error(f"❌ Error: {e}")
 
-# If running this as part of your main app, add to sidebar:
-# In your main app.py, add:
-# if st.sidebar.button("Database Test"):
-#     test_database_page()
 
-# Or run standalone:
+# Run standalone
 if __name__ == "__main__":
     test_database_page()
-
-with st.sidebar.expander("🔧 Database Testing"):
-    if st.button("Open Test Page"):
-        test_database_page()  # The function from above
-        
