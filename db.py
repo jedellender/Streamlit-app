@@ -131,7 +131,3 @@ def load_options(tickers):
     except Exception as e:
         print(f"❌ Load error: {e}")
         return pd.DataFrame()
-
-
-# Initialize database when imported
-init_db()

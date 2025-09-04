@@ -133,177 +133,65 @@ else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
 
-
-
-### temp Database testing page ###
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-from db import get_connection, init_db, save_options, load_options
-import yfinance as yf
-
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from sqlalchemy import text
-from db import get_connection, init_db, save_options, load_options
+from db import get_connection, save_options, load_options, init_db
 
-def test_database_page():
-    """Database Test Page compatible with SQLAlchemy and Streamlit Cloud"""
-    
-    st.title("🔧 Database Test Page")
-    
-    engine = get_connection()
+st.title("🔧 Database Functional Test")
 
-    # ------------------------------
-    # 1️⃣ Test Connection
-    # ------------------------------
-    st.header("1️⃣ Test Connection")
-    if st.button("Test Database Connection"):
+# Make sure table exists
+init_db()
+
+engine = get_connection()
+
+# --- 1️⃣ Enter ticker ---
+test_ticker = st.text_input("Enter a ticker to test save/load:", "AAPL")
+
+# --- 2️⃣ Fetch & Save ---
+if st.button("Fetch and Save Options"):
+    with st.spinner(f"Fetching {test_ticker} options..."):
         try:
-            with engine.connect() as conn:
-                result = conn.execute(text("SELECT version()"))
-                version = result.fetchone()[0]
-            st.success(f"✅ Connected! PostgreSQL version: {version}")
-        except Exception as e:
-            st.error(f"❌ Connection failed: {e}")
-    
-    # ------------------------------
-    # 2️⃣ Check Table
-    # ------------------------------
-    st.header("2️⃣ Check Table")
-    if st.button("Check if table exists"):
-        try:
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = 'options_cache'
-                    )
-                """))
-                exists = result.fetchone()[0]
-                
-                if exists:
-                    st.success("✅ Table 'options_cache' exists!")
-                    
-                    # Count records
-                    count = conn.execute(text("SELECT COUNT(*) FROM options_cache")).scalar()
-                    st.info(f"📊 Total records in database: {count}")
-                    
-                    # Show unique tickers
-                    tickers = conn.execute(text("SELECT DISTINCT ticker FROM options_cache")).fetchall()
-                    if tickers:
-                        st.write("Tickers in database:", [t[0] for t in tickers])
-                else:
-                    st.warning("Table doesn't exist, creating...")
-                    init_db()
-                    st.success("✅ Table created!")
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
-    
-    # ------------------------------
-    # 3️⃣ Save Test Data
-    # ------------------------------
-    st.header("3️⃣ Test Save Data")
-    test_ticker = st.text_input("Enter a ticker to test save:", "AAPL")
-    
-    if st.button("Fetch and Save Options"):
-        with st.spinner(f"Fetching {test_ticker} options..."):
-            try:
-                ticker = yf.Ticker(test_ticker)
-                if ticker.options:
-                    exp_date = ticker.options[0]
-                    opt_chain = ticker.option_chain(exp_date)
-                    
-                    # First 5 calls
-                    test_df = opt_chain.calls.head(5).copy()
-                    test_df['ticker'] = test_ticker
-                    test_df['optionType'] = 'Call'
-                    test_df['expirationDate'] = exp_date
-                    
-                    st.write("Sample data to save:")
-                    st.dataframe(test_df[['strike', 'lastPrice', 'volume']].head())
-                    
-                    save_options(test_df)
-                    st.success(f"✅ Saved {len(test_df)} options for {test_ticker}")
-                else:
-                    st.warning(f"No options found for {test_ticker}")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-    
-    # ------------------------------
-    # 4️⃣ Load Data
-    # ------------------------------
-    st.header("4️⃣ Test Load Data")
-    if st.button("Load All Data from Database"):
-        try:
-            tickers = [t[0] for t in engine.connect().execute(text("SELECT DISTINCT ticker FROM options_cache")).fetchall()]
-            if tickers:
-                st.write(f"Loading data for: {tickers}")
-                df = load_options(tickers)
-                
-                if not df.empty:
-                    st.success(f"✅ Loaded {len(df)} records")
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Records", len(df))
-                    with col2:
-                        st.metric("Unique Tickers", df['ticker'].nunique())
-                    with col3:
-                        st.metric("Expiration Dates", df['expirationDate'].nunique())
-                    st.write("Sample loaded data:")
-                    st.dataframe(df[['ticker', 'strike', 'lastPrice', 'volume', 'stored_at']].head(10))
-                else:
-                    st.warning("Database returned no data")
+            ticker = yf.Ticker(test_ticker)
+            if ticker.options:
+                exp_date = ticker.options[0]
+                opt_chain = ticker.option_chain(exp_date)
+
+                # First 5 calls only
+                df = opt_chain.calls.head(5).copy()
+                df['ticker'] = test_ticker
+                df['optionType'] = 'Call'
+                df['expirationDate'] = exp_date
+
+                st.write("Sample data to save:")
+                st.dataframe(df[['strike', 'lastPrice', 'volume']])
+
+                save_options(df)
+                st.success(f"✅ Saved {len(df)} options for {test_ticker}")
             else:
-                st.info("No data in database yet. Try saving some first!")
+                st.warning(f"No options found for {test_ticker}")
         except Exception as e:
-            st.error(f"❌ Error loading: {e}")
-    
-    # ------------------------------
-    # 5️⃣ Database Status
-    # ------------------------------
-    st.header("5️⃣ Database Status")
-    if st.button("Get Database Stats"):
+            st.error(f"❌ Error fetching/saving: {e}")
+
+# --- 3️⃣ Load & Verify ---
+if st.button("Load Options from DB"):
+    try:
+        loaded_df = load_options([test_ticker])
+        if not loaded_df.empty:
+            st.success(f"✅ Loaded {len(loaded_df)} records for {test_ticker}")
+            st.dataframe(loaded_df[['ticker','strike','lastPrice','volume','stored_at']])
+        else:
+            st.warning("No data found in DB yet. Try saving first!")
+    except Exception as e:
+        st.error(f"❌ Error loading data: {e}")
+
+# --- 4️⃣ Cleanup (optional) ---
+if st.button("Clear Test Data"):
+    with st.spinner("Clearing test data..."):
         try:
-            with engine.connect() as conn:
-                stats = conn.execute(text("""
-                    SELECT 
-                        COUNT(*) as total_records,
-                        COUNT(DISTINCT ticker) as unique_tickers,
-                        MIN(stored_at) as oldest_record,
-                        MAX(stored_at) as newest_record
-                    FROM options_cache
-                """)).fetchone()
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Total Records", stats[0])
-                    st.metric("Unique Tickers", stats[1])
-                with col2:
-                    if stats[2]:
-                        st.metric("Oldest Record", stats[2].strftime("%Y-%m-%d %H:%M"))
-                        st.metric("Newest Record", stats[3].strftime("%Y-%m-%d %H:%M"))
-                
-                size = conn.execute(text("SELECT pg_database_size(current_database())/1024/1024 as size_mb")).scalar()
-                st.info(f"📦 Database size: {size:.2f} MB / 500 MB (free limit)")
+            with engine.begin() as conn:
+                conn.execute("DELETE FROM options_cache WHERE ticker = :t", {"t": test_ticker})
+            st.success(f"✅ Cleared data for {test_ticker}")
         except Exception as e:
-            st.error(f"❌ Error: {e}")
-    
-    # ------------------------------
-    # Cleanup
-    # ------------------------------
-    st.header("🧹 Cleanup")
-    if st.button("Clear All Data", type="secondary"):
-        if st.checkbox("I'm sure - delete everything"):
-            try:
-                with engine.begin() as conn:
-                    conn.execute(text("TRUNCATE TABLE options_cache"))
-                st.success("✅ All data cleared")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+            st.error(f"❌ Error clearing data: {e}")
 
-
-# Run standalone
-if __name__ == "__main__":
-    test_database_page()
