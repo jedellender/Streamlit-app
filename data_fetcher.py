@@ -5,12 +5,9 @@ import numpy as np
 from datetime import date, timedelta
 import datetime as dt
 
-# import local modules
-from db import save_options, load_options
-
-# Fetch Data including current price
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300)  # 5 minute cache for price data
 def fetch_data(tickers):
+    """Fetch equity price and info data."""
     prices, infos, latest_price = {}, {}, {} 
     for t in tickers:
         try:
@@ -35,7 +32,7 @@ def fetch_data(tickers):
             }
                         
         except Exception as e:
-            print(f"Failed to fetch data for {t}. Reason: {e}")
+            print(f"Failed to fetch data for {t}: {e}")
             prices[t] = pd.Series()  
             infos[t] = {}
             latest_price[t] = {"price": np.nan, "time": None}
@@ -46,21 +43,20 @@ def fetch_data(tickers):
 
     return prices_df, infos_df, current_prices
 
-@st.cache_data(ttl=900)
+@st.cache_data(ttl=900)  # 15 minute cache for options - reasonable for options data
 def fetch_options_data(tickers):
-    """Fetch options with robust database fallback"""
+    """Fetch options data from yfinance only."""
     all_options = []
     failed_tickers = []
     
-    # Try fetching from yfinance first
     for t in tickers:
         ticker = yf.Ticker(t)
         ticker_success = False
         
         try:
             exp_dates = ticker.options
-            if not exp_dates:  # No expiration dates available
-                print(f"No options data available for {t} from yfinance")
+            if not exp_dates:
+                print(f"No options available for {t}")
                 failed_tickers.append(t)
                 continue
                 
@@ -96,51 +92,21 @@ def fetch_options_data(tickers):
             print(f"Failed to get options for {t}: {e}")
             failed_tickers.append(t)
     
-    # Combine yfinance data if we got any
-    yfinance_df = pd.DataFrame()
     if all_options:
-        yfinance_df = pd.concat(all_options, ignore_index=True)
-        print(f"Fetched {len(yfinance_df)} options from yfinance for {len(set(yfinance_df['ticker']))} tickers")
+        result_df = pd.concat(all_options, ignore_index=True)
+        print(f"✅ Fetched {len(result_df)} options for {len(set(result_df['ticker']))} tickers")
         
-        # Save to database
-        save_success = save_options(yfinance_df)
-        if save_success:
-            print("Successfully cached yfinance data")
-    
-    # If we have failed tickers or no data at all, try database
-    if failed_tickers or yfinance_df.empty:
-        print(f"Attempting to load cached data for: {failed_tickers if failed_tickers else 'all tickers'}")
+        if failed_tickers:
+            print(f"⚠️ Failed to fetch options for: {failed_tickers}")
         
-        # Load from database
-        db_df = load_options(failed_tickers if failed_tickers else tickers)
-        
-        if not db_df.empty:
-            # Combine yfinance and database data
-            if not yfinance_df.empty:
-                # Remove any duplicate tickers from db_df that we already got from yfinance
-                successful_tickers = set(yfinance_df['ticker'].unique())
-                db_df = db_df[~db_df['ticker'].isin(successful_tickers)]
-                
-                if not db_df.empty:
-                    combined_df = pd.concat([yfinance_df, db_df], ignore_index=True)
-                    print(f"Combined {len(yfinance_df)} live + {len(db_df)} cached options")
-                    return combined_df
-                else:
-                    return yfinance_df
-            else:
-                print(f"Using {len(db_df)} cached options (market likely closed)")
-                return db_df
-    
-    # Return whatever we have
-    if not yfinance_df.empty:
-        return yfinance_df
+        return result_df
     else:
-        print("No options data available from any source")
+        print(f"❌ No options data available. Failed tickers: {failed_tickers}")
         return pd.DataFrame()
 
 @st.cache_data(ttl=300)
 def get_clean_options(options_df, current_prices):
-    """Clean options data with better error handling"""
+    """Clean and filter options data."""
     if options_df.empty:
         return pd.DataFrame()
     
@@ -149,7 +115,7 @@ def get_clean_options(options_df, current_prices):
     # Map current prices
     c_df['current_price'] = c_df['ticker'].map(dict(current_prices['price']))
     
-    # Handle date conversion more robustly
+    # Handle date conversion
     if 'expirationDate' in c_df.columns:
         c_df['expirationDate'] = pd.to_datetime(c_df['expirationDate'], errors='coerce')
     
@@ -162,12 +128,12 @@ def get_clean_options(options_df, current_prices):
     cols_to_drop = ['bid', 'ask', 'contractSize']
     c_df = c_df.drop(columns=[c for c in cols_to_drop if c in c_df.columns], errors='ignore')
     
-    # Filter for quality - be more lenient with cached data
+    # Filter for quality data
     c_df = c_df[
         (c_df['time_to_expiry'] > 0) & 
         (c_df['current_price'].notna()) & 
-        (c_df['volume'] >= 10) &  # Lower threshold for cached data
-        (c_df['openInterest'] >= 50)  # Lower threshold for cached data
+        (c_df['volume'] >= 20) &  # Higher threshold since no fallback
+        (c_df['openInterest'] >= 100)  # Higher threshold for quality
     ]
     
     return c_df
