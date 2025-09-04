@@ -87,6 +87,7 @@ def fetch_options_data(tickers): # function to process options data
     # Combine all dfs
     if all_options:
         combined_df = pd.concat(all_options, ignore_index=True)
+        save_options(combined_df)
         return combined_df
     else:
         # No data from yfinance, try loading from database
