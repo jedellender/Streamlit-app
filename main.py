@@ -10,7 +10,6 @@ from scipy.stats import norm
 from data_fetcher import fetch_options_data, get_clean_options, fetch_data
 from calculations import compute_greeks, display_price_chart, display_price_metrics
 from iv_plotting import create_vol_surface_from_real_data, display_vol_surface_metrics
-from db import get_connection, save_options, load_options, init_db
 st.set_page_config(page_title="Compact Multi-Ticker Dashboard", layout="wide")
 st.sidebar.title("Inputs")
 
@@ -28,7 +27,6 @@ returns = price_df.pct_change().dropna()
 # set dataframe with options data
 options_df = fetch_options_data(tickers) 
 clean_options_df = get_clean_options(options_df, current_prices)
-save_options(options_df)  # Save fetched options to the database
 
 # Compute Beta ( default is spy)
 if benchmark_symbol:
@@ -134,105 +132,3 @@ else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
 
-import streamlit as st
-import pandas as pd
-import yfinance as yf
-from db import get_connection, save_options, load_options, init_db
-
-
-########### TEST
-st.title("🔧 Database Functional Test")
-
-# Make sure table exists
-init_db()
-
-
-import streamlit as st
-from sqlalchemy import text  # Add this import at the top with other imports
-from db import get_connection, save_options, init_db, test_connection
-
-# Database Testing Section
-st.sidebar.divider()
-st.sidebar.subheader("🔧 Database Tools")
-
-# Quick connection test
-if st.sidebar.button("Test DB Connection"):
-    with st.spinner("Testing database..."):
-        if test_connection():
-            st.sidebar.success("✅ Database working")
-        else:
-            st.sidebar.error("❌ Database issue")
-
-# Show cached data info
-if st.sidebar.button("Show Cached Data"):
-    try:
-        engine = get_connection()
-        with engine.connect() as conn:
-            # Get summary
-            result = conn.execute(text("""
-                SELECT 
-                    ticker,
-                    COUNT(*) as options_count,
-                    MIN(expiration_date) as nearest_expiry,
-                    MAX(expiration_date) as furthest_expiry,
-                    MAX(stored_at) as last_updated
-                FROM options_cache
-                GROUP BY ticker
-                ORDER BY ticker
-            """))
-            
-            summary = pd.DataFrame(result.fetchall(), 
-                                 columns=['Ticker', 'Options Count', 'Nearest Expiry', 
-                                         'Furthest Expiry', 'Last Updated'])
-            
-            if not summary.empty:
-                st.sidebar.dataframe(summary)
-            else:
-                st.sidebar.info("No cached data")
-    except Exception as e:
-        st.sidebar.error(f"Error: {e}")
-
-# Force cache refresh
-if st.sidebar.button("🔄 Force Refresh Cache"):
-    # Clear cache
-    st.cache_data.clear()
-    st.rerun()
-
-# Manual database operations (only show in debug mode)
-debug_mode = st.sidebar.checkbox("Debug Mode", value=False)
-
-if debug_mode:
-    st.sidebar.divider()
-    st.sidebar.write("### Debug Operations")
-    
-    # Clear specific ticker
-    ticker_to_clear = st.sidebar.text_input("Clear ticker from DB:")
-    if st.sidebar.button("Clear Ticker") and ticker_to_clear:
-        try:
-            engine = get_connection()
-            with engine.begin() as conn:
-                result = conn.execute(
-                    text("DELETE FROM options_cache WHERE ticker = :ticker"),
-                    {"ticker": ticker_to_clear.upper()}
-                )
-                st.sidebar.success(f"Cleared {result.rowcount} rows for {ticker_to_clear}")
-        except Exception as e:
-            st.sidebar.error(f"Error: {e}")
-    
-    # Show recent errors
-    if st.sidebar.button("Show DB Schema"):
-        try:
-            engine = get_connection()
-            with engine.connect() as conn:
-                result = conn.execute(text("""
-                    SELECT column_name, data_type, is_nullable
-                    FROM information_schema.columns
-                    WHERE table_name = 'options_cache'
-                    ORDER BY ordinal_position
-                """))
-                schema = pd.DataFrame(result.fetchall(), 
-                                    columns=['Column', 'Type', 'Nullable'])
-                st.sidebar.dataframe(schema)
-
-        except Exception as e:
-            st.sidebar.error(f"Error: {e}")
