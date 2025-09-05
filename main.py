@@ -24,9 +24,13 @@ option_expiry = '2025-09-26' #date.today() + timedelta(days=30)
 price_df, factor_df, current_prices = fetch_data(tickers)
 returns = price_df.pct_change().dropna()
 
-# set dataframe with options data
+# set dataframe with options data iff options non-empty
 options_df = fetch_options_data(tickers) 
-clean_options_df = get_clean_options(options_df, current_prices)
+if options_df is None or options_df.empty:
+    st.warning("No options data available for the selected tickers.")
+    st.stop()
+else:
+    clean_options_df = get_clean_options(options_df, current_prices)
 
 # Compute Beta ( default is spy)
 if benchmark_symbol:
@@ -80,24 +84,25 @@ display_price_metrics(price_df, selected_ticker)
 
 
 # format options data
-greeks_df = compute_greeks(clean_options_df) 
-filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
-formatted_df = filtered_df.style.format({
-    "expirationDate": lambda x: x.strftime('%d/%m/%y') if pd.notna(x) else "",
-    "strike": "${:.2f}",
-    "volume":"{:.2f}",
-    "impliedVolatility": "{:.1%}",    
-    "percentChange": "{:.2f}%",
-    "lastPrice": "${:.3f}",
-    "change": "${:.2f}", 
-    "delta": "{:.3f}",
-    "gamma": "{:.4f}",
-    "theta": "{:.4f}",
-    "vega": "{:.4f}",
-    "rho": "{:.4f}",
-    "moneyness": "{:.3f}",
-    "intrinsic_value":"{:.2f}"
-})
+if clean_options_df is not (None or clean_options_df.empty):
+    greeks_df = compute_greeks(clean_options_df) 
+    filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
+    formatted_df = filtered_df.style.format({
+        "expirationDate": lambda x: x.strftime('%d/%m/%y') if pd.notna(x) else "",
+        "strike": "${:.2f}",
+        "volume":"{:.2f}",
+        "impliedVolatility": "{:.1%}",    
+        "percentChange": "{:.2f}%",
+        "lastPrice": "${:.3f}",
+        "change": "${:.2f}", 
+        "delta": "{:.3f}",
+        "gamma": "{:.4f}",
+        "theta": "{:.4f}",
+        "vega": "{:.4f}",
+        "rho": "{:.4f}",
+        "moneyness": "{:.3f}",
+        "intrinsic_value":"{:.2f}"
+    })
 
 
 # toggle display options data

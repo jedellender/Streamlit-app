@@ -13,7 +13,7 @@ def create_vol_surface_from_real_data(filtered_df, selected_ticker, current_pric
         return None, None
     
     # Get current spot price
-    spot_price = current_prices.get(selected_ticker, 100)
+    spot_price = current_prices[selected_ticker]
     
     # Calculate days to expiry if not already present
     if 'days_to_expiry' not in filtered_df.columns:
