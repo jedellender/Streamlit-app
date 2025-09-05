@@ -24,13 +24,6 @@ option_expiry = '2025-09-26' #date.today() + timedelta(days=30)
 price_df, factor_df, current_prices = fetch_data(tickers)
 returns = price_df.pct_change().dropna()
 
-# set dataframe with options data iff options non-empty
-options_df = fetch_options_data(tickers) 
-if options_df is None or options_df.empty:
-    st.warning("No options data available for the selected tickers.")
-    st.stop()
-else:
-    clean_options_df = get_clean_options(options_df, current_prices)
 
 # Compute Beta ( default is spy)
 if benchmark_symbol:
@@ -77,14 +70,17 @@ with col2:
 with col1:
     st.subheader(f"{selected_ticker} options chain")
 
-
 # display daily metrics 
-
 display_price_metrics(price_df, selected_ticker)
 
 
-# format options data
-if clean_options_df is not (None or clean_options_df.empty):
+# set dataframe with options data iff options non-empty
+options_df = fetch_options_data(tickers) 
+if options_df is None or options_df.empty:
+    formatted_df = None
+else:
+    clean_options_df = get_clean_options(options_df, current_prices)
+
     greeks_df = compute_greeks(clean_options_df) 
     filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
     formatted_df = filtered_df.style.format({
