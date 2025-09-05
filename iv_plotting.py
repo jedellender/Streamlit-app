@@ -6,15 +6,15 @@ import streamlit as st
 
 def create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices):
     """
-    Create 3D volatility surface using your real options data
+    Create 3d vol surface using options data
     """
     if filtered_df.empty or len(filtered_df) < 10:
         st.warning(f"Insufficient options data for {selected_ticker}. Need at least 10 data points.")
         return None, None
     
-    # Get current spot price
-    spot_price = current_prices[selected_ticker]
-    
+    # Get current price
+    spot_price = current_prices.at[selected_ticker, 'price']
+
     # Calculate days to expiry if not already present
     if 'days_to_expiry' not in filtered_df.columns:
         df_copy = filtered_df.copy()
@@ -111,6 +111,7 @@ def create_vol_surface_from_real_data(filtered_df, selected_ticker, current_pric
                           '<extra></extra>'
         ))
         
+        
         # Update layout
         fig.update_layout(
             title={
@@ -145,12 +146,12 @@ def create_vol_surface_from_real_data(filtered_df, selected_ticker, current_pric
         })
         
         return fig, summary_df
-        
+    
     except Exception as e:
-        st.error(f"Error creating volatility surface: {str(e)}")
+        st.error(f"Error creating volatility surface Message: {e}")
         return None, None
 
-def display_vol_surface_metrics(summary_df, spot_price):
+def display_vol_surface_metrics(summary_df, current_price):
     """
     Display key volatility surface metrics
     """

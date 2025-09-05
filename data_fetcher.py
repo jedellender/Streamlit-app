@@ -40,6 +40,8 @@ def fetch_data(tickers):
     prices_df = pd.DataFrame(prices)
     infos_df = pd.DataFrame(infos).T
     current_prices = pd.DataFrame.from_dict(latest_price, orient='index')
+    current_prices['price'] = pd.to_numeric(current_prices['price'], errors='coerce')
+    current_prices['time'] = pd.to_datetime(current_prices['time'], errors='coerce')
 
     return prices_df, infos_df, current_prices
 
@@ -133,7 +135,8 @@ def get_clean_options(options_df, current_prices):
         (c_df['time_to_expiry'] > 0) & 
         (c_df['current_price'].notna()) & 
         (c_df['volume'] >= 20) &  # Higher threshold since no fallback
-        (c_df['openInterest'] >= 100)  # Higher threshold for quality
-    ]
+        (c_df['openInterest'] >= 100) &  # Higher threshold for quality
+        (c_df['impliedVolatility'] > 0 )
+        ]
     
     return c_df

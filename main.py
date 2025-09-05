@@ -29,7 +29,7 @@ returns = price_df.pct_change().dropna()
 if benchmark_symbol:
     try:
         bench_returns = yf.Ticker(benchmark_symbol).history(period="1y")["Close"].pct_change().dropna()
-        bench_returns = bench_returns.reindex(returns.index).fillna(method="ffill")
+        bench_returns = bench_returns.reindex(returns.index).obj.bfill()
         betas = {t: np.cov(returns[t], bench_returns)[0,1]/np.var(bench_returns) for t in returns.columns}
         factor_df["Beta"] = pd.Series(betas)
     except:
@@ -74,15 +74,29 @@ with col1:
 display_price_metrics(price_df, selected_ticker)
 
 
-# set dataframe with options data iff options non-empty
+# set dataframe with options data iff options non-empty, initalise dfs for display, calculations resp.
 options_df = fetch_options_data(tickers) 
-if options_df is None or options_df.empty:
-    formatted_df = None
-else:
+formatted_df = None # 
+calc_df = None
+
+if options_df is not None and not options_df.empty:
     clean_options_df = get_clean_options(options_df, current_prices)
 
+    # compute greeks
     greeks_df = compute_greeks(clean_options_df) 
+
+    # filter for selected ticker and sort by volume
     filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
+    
+    # ensure cols are numeric
+    numeric_cols = [
+        "strike", "volume", "impliedVolatility", "percentChange",
+        "lastPrice", "change", "delta", "gamma", "theta", "vega",
+        "rho", "moneyness", "intrinsic_value"
+    ]
+    filtered_df[numeric_cols] = filtered_df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+
+    # create formatted display df
     formatted_df = filtered_df.style.format({
         "expirationDate": lambda x: x.strftime('%d/%m/%y') if pd.notna(x) else "",
         "strike": "${:.2f}",
@@ -100,25 +114,32 @@ else:
         "intrinsic_value":"{:.2f}"
     })
 
+# make copy of filtered options dataframe for calculations
+    calc_df = filtered_df.copy()
 
 # toggle display options data
 with st.expander("Toggle options data"):
-        if formatted_df is not None:
+        if calc_df is not None:
             st.dataframe(
-                formatted_df, 
+                calc_df, 
                 use_container_width=True,
             )
         else:
             st.info("No options data available for the selected ticker.")
 
 
-
 # vol surface iff options data non-empty
 st.subheader('Volatility Surface')
 
-if formatted_df is not None:
+
+
+if calc_df is not None:
+
+
     surface_fig, market_data = create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices)
-    display_vol_surface_metrics(market_data, current_prices.get(selected_ticker, 100))
+
+
+    display_vol_surface_metrics(market_data, current_prices)
     if surface_fig is not None:
         st.plotly_chart(surface_fig, use_container_width=True)
     
