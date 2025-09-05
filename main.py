@@ -119,8 +119,8 @@ st.subheader('Volatility Surface')
 if formatted_df is not None:
     surface_fig, market_data = create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices)
     display_vol_surface_metrics(market_data, current_prices.get(selected_ticker, 100))
-    st.plotly_chart(surface_fig, use_container_width=True)
-    
+    if surface_fig is not None:
+        st.plotly_chart(surface_fig, use_container_width=True)
     
 else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
