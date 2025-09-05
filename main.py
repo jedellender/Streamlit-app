@@ -126,3 +126,87 @@ else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
 
+import streamlit as st
+import time
+from datetime import datetime
+import uuid
+
+# Simple test to see if cache persists across users/sessions
+
+@st.cache_data(ttl=300)  # 5 minute cache
+def test_cache_persistence():
+    """This function should only run once per 5 minutes if cache is shared."""
+    unique_id = str(uuid.uuid4())[:8]
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    
+    # Simulate expensive operation
+    time.sleep(2)
+    
+    return {
+        "unique_id": unique_id,
+        "created_at": timestamp,
+        "message": "This data was fetched fresh from 'API'"
+    }
+
+# Test page
+st.title("🧪 Cache Persistence Test")
+
+st.write("""
+**Test Instructions:**
+1. Load this page and note the unique_id and timestamp
+2. Open a new incognito/private browser window  
+3. Navigate to the same URL
+4. Check if the unique_id and timestamp are the same
+
+**If cache is shared:** Same ID and timestamp in both windows
+**If cache is NOT shared:** Different ID and timestamp
+""")
+
+# Get cached data
+with st.spinner("Loading... (2 second delay if cache miss)"):
+    cached_data = test_cache_persistence()
+
+st.success("✅ Data loaded!")
+
+# Display results
+col1, col2 = st.columns(2)
+with col1:
+    st.metric("Unique ID", cached_data["unique_id"])
+with col2:
+    st.metric("Created At", cached_data["created_at"])
+
+st.info(f"Message: {cached_data['message']}")
+
+# Instructions
+st.divider()
+st.subheader("🔍 How to Interpret Results")
+
+st.write("""
+**Scenario A - Cache IS Shared:**
+- First user: Gets new ID (e.g., `abc123ef`) after 2-second delay
+- Second user (different browser): Gets SAME ID (`abc123ef`) instantly
+- ✅ Cache works across users!
+
+**Scenario B - Cache NOT Shared:**  
+- First user: Gets new ID (e.g., `abc123ef`) after 2-second delay
+- Second user (different browser): Gets DIFFERENT ID (`xyz789gh`) after 2-second delay
+- ❌ Each user has separate cache
+
+**What this means for your options app:**
+- Scenario A: Your dual caching strategy works great across users
+- Scenario B: Every user will hit yfinance APIs separately
+""")
+
+# Additional info
+with st.expander("🔧 Technical Details"):
+    st.write(f"""
+    - **Cache Function:** `test_cache_persistence()`
+    - **TTL:** 5 minutes
+    - **Current Time:** {datetime.now().strftime("%H:%M:%S")}
+    - **Cache Key:** Based on function name and parameters (none in this case)
+    """)
+
+# Reset button for testing
+if st.button("🗑️ Clear Cache (for testing)"):
+    test_cache_persistence.clear()
+    st.rerun()
