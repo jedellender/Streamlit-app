@@ -113,22 +113,15 @@ with st.expander("Toggle options data"):
 
 
 
-# vol surface
+# vol surface iff options data non-empty
 st.subheader('Volatility Surface')
 
-surface_fig, market_data = create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices)
-
-if surface_fig is not None:
+if formatted_df is not None:
+    surface_fig, market_data = create_vol_surface_from_real_data(filtered_df, selected_ticker, current_prices)
     display_vol_surface_metrics(market_data, current_prices.get(selected_ticker, 100))
     st.plotly_chart(surface_fig, use_container_width=True)
     
-    # Optional: Show sample of the data used
-    # with st.expander("📊 Data Used for Surface"):
-    #     if market_data is not None:
-    #         st.dataframe(
-    #             market_data.head(10).round(4), 
-    #             use_container_width=True
-    #         )
+    
 else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
