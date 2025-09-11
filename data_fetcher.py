@@ -107,7 +107,7 @@ def fetch_options_data(tickers):
         return pd.DataFrame()
 
 @st.cache_data(ttl=300)
-def get_clean_options(options_df, current_prices):
+def get_clean_options(options_df, current_prices, t_max, v_max=2, on=False):
     """Clean and filter options data."""
     if options_df.empty:
         return pd.DataFrame()
@@ -125,18 +125,26 @@ def get_clean_options(options_df, current_prices):
     today = pd.Timestamp.now()
     c_df['days_to_expiry'] = (c_df['expirationDate'] - today).dt.days
     c_df['time_to_expiry'] = c_df['days_to_expiry'] / 365.0
+
+    # add bid ask spread and pct
+    c_df['bid_ask_spread'] = c_df['ask'] - c_df['bid']
+    c_df['bid_ask_spread_pct'] = (c_df['bid_ask_spread'] / c_df['lastPrice']) * 100
+    
     
     # Drop unnecessary columns
-    cols_to_drop = ['bid', 'ask', 'contractSize']
+    cols_to_drop = ['contractSize']
+    
     c_df = c_df.drop(columns=[c for c in cols_to_drop if c in c_df.columns], errors='ignore')
     
     # Filter for quality data
     c_df = c_df[
-        (c_df['time_to_expiry'] > 0) & 
-        (c_df['current_price'].notna()) & 
-        (c_df['volume'] >= 20) &  # Higher threshold since no fallback
+        (c_df['current_price'].notna() | on) &  # Skip if using backup data  
+        (c_df['volume'] >= 50) &  # Higher threshold since no fallback
         (c_df['openInterest'] >= 100) &  # Higher threshold for quality
-        (c_df['impliedVolatility'] > 0 )
-        ]
+        (c_df['time_to_expiry'] > 0) & 
+        (0.01 < c_df['impliedVolatility']) &
+        (c_df['impliedVolatility'] < v_max)  &
+        (c_df['bid_ask_spread_pct'] < 20)
+        ]   
     
     return c_df

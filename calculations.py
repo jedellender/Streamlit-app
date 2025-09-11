@@ -38,7 +38,7 @@ def compute_greeks(clean_options_df, risk_free_rate=0.04): # function to compute
     # Call Greeks
     df.loc[call_mask, 'delta'] = N_d1[call_mask]
     df.loc[call_mask, 'theta'] = (-(S[call_mask] * n_d1[call_mask] * sig[call_mask]) / (2 * np.sqrt(T[call_mask])) 
-                                  - r * K[call_mask] * np.exp(-r * T[call_mask]) * N_d2[call_mask]) / 365
+                                  - r * K[call_mask] * np.exp(-r * T[call_mask]) * N_d2[call_mask]) / 252
     df.loc[call_mask, 'rho'] = K[call_mask] * T[call_mask] * np.exp(-r * T[call_mask]) * N_d2[call_mask] / 100
     
 # Gamma and Vega are the same for calls and puts
@@ -52,27 +52,21 @@ def compute_greeks(clean_options_df, risk_free_rate=0.04): # function to compute
                                     np.maximum(K - S, 0))
     
     # Clean up naff columns, return dataframe with greeks in 
-    clean_df = df.drop(['current_price', 'time_to_expiry', 'currency', 'inTheMoney','contractSymbol','lastTradeDate' ], axis=1)
-    
+    cols_to_drop = ['contractSize']
+    existing_cols_to_drop = [col for col in cols_to_drop if col in df.columns]
+    clean_df = df.drop(existing_cols_to_drop, axis=1)
+
     # reorder cols in sensible way
     df_reordered = clean_df.loc[:, ['ticker','optionType', 'strike', 'expirationDate','volume','impliedVolatility', 'lastPrice', 'change', 'percentChange',
      'delta', 'gamma', 'theta', 'vega', 'rho', 'moneyness',
-       'intrinsic_value','openInterest']]
+       'intrinsic_value','openInterest', 'bid', 'ask']]
 
 
     return df_reordered
 
 
 def display_price_chart(prices_df):
-    """
-    Display a simple Plotly time series chart with clean x-axis.
-    
-    Args:
-        prices_df (pd.DataFrame): DataFrame with datetime index and ticker columns
-        title (str): Chart title
-    """
 
-    
     if prices_df.empty:
         st.warning("No price data available.")
         return
@@ -106,19 +100,8 @@ def display_price_chart(prices_df):
     st.plotly_chart(fig, use_container_width=True, config=config)
 
 
-
-
-
-
-
 def display_price_metrics(prices_df, ticker):
-    """
-    Display current price and daily change metrics for a specific ticker.
-    
-    Args:
-        prices_df (pd.DataFrame): DataFrame with datetime index and ticker columns
-        ticker (str): Ticker symbol to display metrics for
-    """
+
     if prices_df.empty or ticker not in prices_df.columns:
         st.warning(f"No data available for {ticker}")
         return
