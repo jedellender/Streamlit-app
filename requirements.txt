@@ -8,3 +8,4 @@ psycopg2-binary
 datetime
 matplotlib
 sqlalchemy
+py_vollib
