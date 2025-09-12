@@ -62,7 +62,7 @@ with st.sidebar:
     else:
         options_df = fetch_options_data(tickers)
     st.markdown("###### (*Live data may be unavailable outside of US market hours)")
-    st.markdown("###### (**SPY data/options chain as of 10/09/2025)")
+    st.markdown("###### (**Example data/options chain as of 10/09/2025)")
     
 
 
