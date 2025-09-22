@@ -203,9 +203,6 @@ if calc_df is not None and not calc_df.empty:
         formatted_liquid, summary_metrics = format_top_liquid_options(top_liquid)
         insights = get_liquidity_insights(summary_metrics)
         
-        # Display insights
-        st.info(f"**Liquidity Insights**: {insights}")
-        
         # Display top liquid options table
         st.subheader("Most Liquid Options")
         st.dataframe(
@@ -213,6 +210,9 @@ if calc_df is not None and not calc_df.empty:
             use_container_width=True,
             hide_index=True
         )
+        
+        # Display insights
+        st.info(f"**Liquidity Insights**: {insights}")
 
 # display chart
 with st.expander(label='Toggle chart', expanded=True):
