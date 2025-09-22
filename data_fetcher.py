@@ -12,7 +12,7 @@ def fetch_data(tickers):
     for t in tickers:
         try:
             ticker = yf.Ticker(t)
-            hist = ticker.history(period="1y")["Close"]
+            hist = ticker.history(period="3mo")["Close"]
             prices[t] = hist
             info = ticker.info
             current_price = info.get('currentPrice')

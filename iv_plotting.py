@@ -5,6 +5,59 @@ from scipy.interpolate import griddata
 import streamlit as st
 from scipy.ndimage import gaussian_filter1d, gaussian_filter
 from scipy.interpolate import interp1d
+
+def calculate_dual_population_skew(expiry_data, spot_price):
+    """Calculate separate IV skew slopes for calls and puts"""
+    if len(expiry_data) < 6:  # Need at least 3 calls and 3 puts
+        return None, None
+    
+    results = {}
+    
+    for option_type in ['Call', 'Put']:
+        # Filter for specific option type
+        type_data = expiry_data[expiry_data['optionType'] == option_type].copy()
+        if len(type_data) < 3:
+            results[option_type] = None
+            continue
+        
+        type_data['log_moneyness'] = np.log(type_data['strike'] / spot_price)
+        type_data = type_data.sort_values('log_moneyness')
+        
+        # Different moneyness ranges for calls vs puts
+        if option_type == 'Call':
+            # Calls: focus on ATM to OTM (positive log moneyness)
+            reasonable_range = (type_data['log_moneyness'] >= -0.1) & (type_data['log_moneyness'] <= 0.3)
+        else:
+            # Puts: focus on OTM to ATM (negative log moneyness)
+            reasonable_range = (type_data['log_moneyness'] >= -0.3) & (type_data['log_moneyness'] <= 0.1)
+        
+        type_data = type_data[reasonable_range]
+        
+        if len(type_data) < 3:
+            results[option_type] = None
+            continue
+        
+        x = type_data['log_moneyness'].values
+        y = type_data['impliedVolatility'].values
+        
+        # Remove any NaN values
+        valid_mask = ~(np.isnan(x) | np.isnan(y))
+        x = x[valid_mask]
+        y = y[valid_mask]
+        
+        if len(x) < 3:
+            results[option_type] = None
+            continue
+        
+        try:
+            # Linear regression slope
+            slope = np.polyfit(x, y, 1)[0]
+            results[option_type] = slope
+        except:
+            results[option_type] = None
+    
+    return results.get('Call'), results.get('Put')
+
 def create_vol_surface(filtered_df, selected_ticker, current_prices, dte_max=210):
     if filtered_df.empty or len(filtered_df) < 10:
         st.warning(f"Insufficient options data for {selected_ticker}. Need at least 10 data points.")
@@ -238,9 +291,19 @@ def plot_vol_2d(filtered_df, selected_ticker, current_prices):
     
     # Calculate moneyness and filter
     data['log_moneyness'] = np.log(data['strike'] / spot_price)
-    data = data.sort_values('log_moneyness')  
-    x = data['log_moneyness'].values
-    y = data['impliedVolatility'].values
+    data = data.sort_values('log_moneyness')
+    
+    # Apply moneyness and IV filters
+    reasonable_range = (data['log_moneyness'] >= -0.2) & (data['log_moneyness'] <= 0.3)
+    reasonable_iv = (data['impliedVolatility'] > 0) & (data['impliedVolatility'] < 3)
+    reasonables = reasonable_range & reasonable_iv
+    data = data[reasonables]
+    
+    if len(data) < 3:
+        x, y = np.array([]), np.array([])
+    else:
+        x = data['log_moneyness'].values
+        y = data['impliedVolatility'].values
     
     # Create smooth interpolation
     if len(x) >= 4:  # Need minimum points for interpolation
@@ -253,7 +316,7 @@ def plot_vol_2d(filtered_df, selected_ticker, current_prices):
         # Plot smooth curve
         fig.add_trace(go.Scatter(
             x=x_smooth, y=y_smooth,
-            mode='lines', name='IV Smile',
+            mode='lines', name='IV Skew',
             line=dict(width=3)
         ))
     
@@ -275,4 +338,89 @@ def plot_vol_2d(filtered_df, selected_ticker, current_prices):
         yaxis_tickformat='.1%'
     )
     
-    return fig
+    # Return simplified consensus data without z-scores
+    consensus_data = {
+        'days_to_exp': days_to_exp,
+        'data_points': len(x)
+    }
+    
+    return fig, consensus_data
+
+def plot_dual_population_skew(filtered_df, selected_ticker, current_prices):
+    """Plot volatility skew using dual-population approach (separate calls and puts)"""
+    fig = go.Figure()
+    
+    # Get current price for moneyness
+    spot_price = current_prices.at[selected_ticker, 'price']
+    
+    # Get data for nearest expiry
+    nearest_exp = filtered_df['expirationDate'].min()
+    data = filtered_df[filtered_df['expirationDate'] == nearest_exp].copy()
+    
+    # Calculate moneyness for all data
+    data['log_moneyness'] = np.log(data['strike'] / spot_price)
+    
+    colors = {'Call': '#1f77b4', 'Put': '#ff7f0e'}
+    
+    for option_type in ['Call', 'Put']:
+        type_data = data[data['optionType'] == option_type].copy()
+        
+        if len(type_data) < 3:
+            continue
+            
+        # Apply moneyness filters
+        if option_type == 'Call':
+            reasonable_range = (type_data['log_moneyness'] >= -0.1) & (type_data['log_moneyness'] <= 0.3)
+        else:
+            reasonable_range = (type_data['log_moneyness'] >= -0.3) & (type_data['log_moneyness'] <= 0.1)
+        
+        reasonable_iv = (type_data['impliedVolatility'] > 0) & (type_data['impliedVolatility'] < 3)
+        reasonables = reasonable_range & reasonable_iv
+        type_data = type_data[reasonables]
+        
+        if len(type_data) < 3:
+            continue
+            
+        type_data = type_data.sort_values('log_moneyness')
+        x = type_data['log_moneyness'].values
+        y = type_data['impliedVolatility'].values
+        
+        # Plot data points
+        fig.add_trace(go.Scatter(
+            x=x, y=y,
+            mode='markers', name=f'{option_type} Data',
+            marker=dict(opacity=0.6, size=8, color=colors[option_type])
+        ))
+        
+        # Add regression line if enough points
+        if len(x) >= 3:
+            try:
+                slope, intercept = np.polyfit(x, y, 1)
+                x_line = np.linspace(x.min(), x.max(), 100)
+                y_line = slope * x_line + intercept
+                
+                fig.add_trace(go.Scatter(
+                    x=x_line, y=y_line,
+                    mode='lines', name=f'{option_type} Fit',
+                    line=dict(width=2, color=colors[option_type], dash='dash')
+                ))
+            except:
+                pass
+    
+    # Add ATM line
+    fig.add_vline(x=0, line_dash="dash", line_color="gray", annotation_text="ATM")
+    
+    days_to_exp = (nearest_exp - pd.Timestamp.now()).days + 1
+    
+    # Calculate dual population skews for display
+    call_slope, put_slope = calculate_dual_population_skew(data, spot_price)
+    title_text = f'{selected_ticker} Skew - DTE: {days_to_exp}D'
+    
+    fig.update_layout(
+        title=title_text,
+        xaxis_title='Log Moneyness',
+        yaxis_title='Implied Volatility',
+        yaxis_tickformat='.1%'
+    )
+    
+    return fig, {'call_slope': call_slope, 'put_slope': put_slope, 'data_points': len(data)}

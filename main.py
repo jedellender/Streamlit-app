@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 # import functions 
 from data_fetcher import fetch_options_data, get_clean_options, fetch_data
 from calculations import compute_greeks, display_price_chart, display_price_metrics
-from iv_plotting import create_vol_surface, display_vol_surface_metrics, plot_vol_2d
+from iv_plotting import create_vol_surface, display_vol_surface_metrics, plot_dual_population_skew, plot_vol_2d
 from iv_solver import iv_calc
 st.set_page_config(page_title="Compact Multi-Ticker Dashboard", layout="wide")
 
@@ -52,8 +52,15 @@ with st.sidebar:
         "Backup_liquid_options/spy_2025-09-10T19-10_export.csv",
         "Backup_liquid_options/tsla_2025-09-10T19-10_export.csv" ]
         
-        for backup_export in backup_liquid_options:
+        # hardcode stock price at time of export for moneyness calc
+        backup_historical_prices = {
+            "AMD": 159.54,
+            "IONQ": 43.86,
+            "SPY": 652.21,
+            "TSLA": 347.79
+        }
 
+        for backup_export in backup_liquid_options:
             options_df = pd.concat([options_df, pd.read_csv(backup_export,
                 parse_dates=["expirationDate"] )]
         )
@@ -68,13 +75,19 @@ with st.sidebar:
 
 # fetch equity data.
 price_df, factor_df, current_prices = fetch_data(tickers)
+
+# Override with historical prices if using backup data
+if on:
+    for ticker, historical_price in backup_historical_prices.items():
+        if ticker in current_prices.index:
+            current_prices.at[ticker, 'price'] = historical_price
 returns = price_df.pct_change().dropna()
 
 
 # Compute Beta ( default is spy)
 if benchmark_symbol:
     try:
-        bench_returns = yf.Ticker(benchmark_symbol).history(period="1y")["Close"].pct_change().dropna()
+        bench_returns = yf.Ticker(benchmark_symbol).history(period="3mo")["Close"].pct_change().dropna()
         bench_returns = bench_returns.reindex(returns.index).bfill()
         betas = {t: round(np.cov(returns[t], bench_returns)[0,1]/np.var(bench_returns), 2) for t in returns.columns}
         factor_df["Beta"] = pd.Series(betas)
@@ -101,22 +114,12 @@ with col2:
     corr = returns.corr().style.background_gradient(cmap='RdYlBu', axis=None, vmax=1, vmin=-1).format("{:.2f}")
     st.dataframe(corr,width=400)
 
-# display chart
-with st.expander(label='Toggle chart', expanded=True):
-    if not price_df.empty:
-        display_price_chart(price_df)
-    else:
-        st.info("No price data available.")
-
-
-
 # choose equity for options data
 col1, col2 = st.columns([1,1])
 with col2:
     selected_ticker = st.selectbox("Select ticker:", tickers )#, label_visibility="collapsed")
 with col1:
     st.subheader(f"{selected_ticker} options chain")
-
 
 # display daily metrics 
 display_price_metrics(price_df, selected_ticker)
@@ -171,15 +174,24 @@ if options_df is not None and not options_df.empty:
 # make copy of filtered options dataframe for calculations
     calc_df = filtered_df.copy()
 
-# toggle display options data
-with st.expander("Toggle options data"):
-        if calc_df is not None:
-            st.dataframe(
-                calc_df, 
-                use_container_width=True,
-            )
-        else:
-            st.info("No options data available for the selected ticker.")
+# volatility smile (skew) - 2D plot
+if filtered_df is None or filtered_df.empty:
+    st.warning("No data available for volatility smile.")
+    consensus_data = None
+else:
+    smile_fig, consensus_data = plot_dual_population_skew(filtered_df, selected_ticker, current_prices)
+    st.plotly_chart(smile_fig)
+
+# Display dual population metrics
+if consensus_data is not None:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if consensus_data['call_slope'] is not None:
+            st.metric("Call Slope", f"{consensus_data['call_slope']:.3f}")
+        if consensus_data['put_slope'] is not None:
+            st.metric("Put Slope", f"{consensus_data['put_slope']:.3f}")
+    with col2:
+        st.metric("Data Points", consensus_data.get('data_points', 'N/A'))
 
 # vol surface iff options data non-empty
 st.subheader(f" {selected_ticker} Volatility Surface")
@@ -193,8 +205,30 @@ if calc_df is not None:
 else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
 
-if filtered_df is None or filtered_df.empty:
-        st.warning("No data available for volatility smile.")
+# display chart
+with st.expander(label='Toggle chart', expanded=True):
+    if not price_df.empty:
+        display_price_chart(price_df)
+    else:
+        st.info("No price data available.")
+
+# toggle display options data
+with st.expander("Toggle options data"):
+        if calc_df is not None:
+            st.dataframe(
+                calc_df, 
+                use_container_width=True,
+            )
+        else:
+            st.info("No options data available for the selected ticker.")
+
+# Add 2D Volatility Plot section
+"""st.subheader(f"{selected_ticker} 2D Volatility Plot")
+if filtered_df is not None and not filtered_df.empty:
+    fig, _ = plot_vol_2d(filtered_df, selected_ticker, current_prices)
+    if fig is not None:
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Unable to create 2D volatility plot for the selected ticker.")
 else:
-    smile_fig = plot_vol_2d(filtered_df, selected_ticker, current_prices)
-    st.plotly_chart(smile_fig)
+    st.info("No data available for 2D volatility plot.")"""
