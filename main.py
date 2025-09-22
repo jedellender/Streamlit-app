@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 from data_fetcher import fetch_options_data, get_clean_options, fetch_data
 from calculations import compute_greeks, display_price_chart, display_price_metrics
 from iv_plotting import create_vol_surface, display_vol_surface_metrics, plot_dual_population_skew, plot_vol_2d
-from iv_solver import iv_calc
+from liquidity_analysis import get_top_liquid_options, format_top_liquid_options, get_liquidity_insights
 st.set_page_config(page_title="Compact Multi-Ticker Dashboard", layout="wide")
 
 # init sidebar
@@ -119,7 +119,7 @@ col1, col2 = st.columns([1,1])
 with col2:
     selected_ticker = st.selectbox("Select ticker:", tickers )#, label_visibility="collapsed")
 with col1:
-    st.subheader(f"{selected_ticker} options chain")
+    st.subheader(f"{selected_ticker} option analytics")
 
 # display daily metrics 
 display_price_metrics(price_df, selected_ticker)
@@ -132,8 +132,8 @@ filtered_df = None # init filtered df.
 if options_df is not None and not options_df.empty:
     clean_options_df = get_clean_options(options_df, current_prices, t_max, v_max, on=on)
 
-    # clean IV with py_vollib
-    clean_options_df = iv_calc(clean_options_df)
+    # Use yfinance IV directly (more reliable than solver)
+    # clean_options_df = iv_calc(clean_options_df)  # DISABLED - using market IV instead
 
     # compute greeks
     greeks_df = compute_greeks(clean_options_df) 
@@ -182,16 +182,36 @@ else:
     smile_fig, consensus_data = plot_dual_population_skew(filtered_df, selected_ticker, current_prices)
     st.plotly_chart(smile_fig)
 
-# Display dual population metrics
-if consensus_data is not None:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        if consensus_data['call_slope'] is not None:
-            st.metric("Call Slope", f"{consensus_data['call_slope']:.3f}")
-        if consensus_data['put_slope'] is not None:
-            st.metric("Put Slope", f"{consensus_data['put_slope']:.3f}")
-    with col2:
-        st.metric("Data Points", consensus_data.get('data_points', 'N/A'))
+# Display liquidity analysis instead of slopes
+if consensus_data is not None and filtered_df is not None:
+    # Get top 3 most liquid options
+    top_liquid = get_top_liquid_options(filtered_df[filtered_df['ticker'] == selected_ticker], top_n=3)
+    
+    if top_liquid is not None and not top_liquid.empty:
+        formatted_liquid, summary_metrics = format_top_liquid_options(top_liquid)
+        insights = get_liquidity_insights(summary_metrics)
+        
+        # Display insights
+        st.info(f"💧 **Liquidity Insights**: {insights}")
+        
+        # Display top liquid options table
+        st.subheader("🔥 Top 3 Most Liquid Options")
+        st.dataframe(
+            formatted_liquid,
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        # Display summary metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Volume", f"{summary_metrics['total_volume']:,.0f}")
+        with col2:
+            st.metric("Avg IV", f"{summary_metrics['avg_iv']:.1%}")
+        with col3:
+            st.metric("Data Points", consensus_data.get('data_points', 'N/A'))
+    else:
+        st.warning("No liquid options found for analysis.")
 
 # vol surface iff options data non-empty
 st.subheader(f" {selected_ticker} Volatility Surface")
