@@ -21,9 +21,6 @@ def get_top_liquid_options(df, top_n=3):
         df['norm_oi'] = df['openInterest'] / max_oi
         
         # Liquidity score: 60% volume, 40% open interest (volume more important for immediate tradability)
-        df['liquidity_score'] = (df['norm_volume'] * 0.6) + (df['norm_oi'] * 0.4)
-    else:
-        # Fallback to just volume if open interest not available
         df['liquidity_score'] = df['volume'] if 'volume' in df.columns else 0
     
     # Get top N most liquid options
@@ -37,7 +34,6 @@ def get_top_liquid_options(df, top_n=3):
     
     # Only include columns that exist in the dataframe
     available_columns = [col for col in display_columns if col in top_liquid.columns]
-    
     return top_liquid[available_columns]
 
 def format_top_liquid_options(top_liquid_df):
@@ -53,7 +49,7 @@ def format_top_liquid_options(top_liquid_df):
     
     # Format columns for better display
     if 'expirationDate' in formatted_df.columns:
-        formatted_df['Expiry'] = pd.to_datetime(formatted_df['expirationDate']).dt.strftime('%m/%d')
+        formatted_df['Expiry'] = pd.to_datetime(formatted_df['expirationDate']) #.dt.strftime('%m/%d')
     
     if 'impliedVolatility' in formatted_df.columns:
         formatted_df['IV'] = (formatted_df['impliedVolatility'] * 100).round(1).astype(str) + '%'
@@ -98,18 +94,18 @@ def get_liquidity_insights(summary_metrics):
     
     # Volume insight
     if total_vol > 1000:
-        insights.append("🔥 HIGH ACTIVITY - Strong trading volume")
+        insights.append("High volume")
     elif total_vol > 100:
-        insights.append("📊 MODERATE ACTIVITY - Decent liquidity")
+        insights.append("Moderate volume")
     else:
-        insights.append("📉 LOW ACTIVITY - Limited liquidity")
-    
+        insights.append("Low volume")
+
     # Call/Put bias
     if call_count > put_count:
-        insights.append("📈 CALL BIAS - More liquid call options")
+        insights.append("Call bias")
     elif put_count > call_count:
-        insights.append("📉 PUT BIAS - More liquid put options")
+        insights.append("Put bias")
     else:
-        insights.append("⚖️ BALANCED - Equal call/put liquidity")
-    
+        insights.append("Balanced call/put liquidity")
+
     return " | ".join(insights)

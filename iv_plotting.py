@@ -115,7 +115,7 @@ def create_vol_surface(filtered_df, selected_ticker, current_prices, dte_max=210
         sqrt_dte = np.sqrt(dte)
 
         # interpolate log moneyness and sqrt DTE
-        log_moneyness_range = np.linspace(-1, 1, 50) # max, min, resolution
+        log_moneyness_range = np.linspace(-0.3, 0.3, 50) # max, min, resolution
         sqrt_dte_range = np.linspace(np.sqrt(max(1/252.0, dte.min())), np.sqrt(dte.max()), 50)
         X, Y_sqrt = np.meshgrid(log_moneyness_range, sqrt_dte_range)
         
@@ -136,7 +136,7 @@ def create_vol_surface(filtered_df, selected_ticker, current_prices, dte_max=210
 
         # Use linear where available, nearest only for small gaps
         Z = np.where(np.isnan(Z_linear), Z_nearest, Z_linear)
-        Z = gaussian_filter(Z, sigma=1.5)  # Light smoothing after interpolation
+        Z = gaussian_filter(Z, sigma=3.0)  # Light smoothing after interpolation
         #print(f"Non-NaN Z values: {np.sum(~np.isnan(Z))}/{Z.size}")
 
         # reset Y for display (but interpolating in sqrt space) 
@@ -191,7 +191,7 @@ def create_vol_surface(filtered_df, selected_ticker, current_prices, dte_max=210
                     
                 )
             ),
-            
+            visible=False,  # Hide by default
             name='Click to toggle: Data points',
             hovertemplate='<b>Moneyness:</b> $%{x:.2f}<br>' +
                           '<b>Days to Expiry:</b> %{y:.0f}<br>' +

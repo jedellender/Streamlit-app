@@ -182,37 +182,6 @@ else:
     smile_fig, consensus_data = plot_dual_population_skew(filtered_df, selected_ticker, current_prices)
     st.plotly_chart(smile_fig)
 
-# Display liquidity analysis instead of slopes
-if consensus_data is not None and filtered_df is not None:
-    # Get top 3 most liquid options
-    top_liquid = get_top_liquid_options(filtered_df[filtered_df['ticker'] == selected_ticker], top_n=3)
-    
-    if top_liquid is not None and not top_liquid.empty:
-        formatted_liquid, summary_metrics = format_top_liquid_options(top_liquid)
-        insights = get_liquidity_insights(summary_metrics)
-        
-        # Display insights
-        st.info(f"💧 **Liquidity Insights**: {insights}")
-        
-        # Display top liquid options table
-        st.subheader("🔥 Top 3 Most Liquid Options")
-        st.dataframe(
-            formatted_liquid,
-            use_container_width=True,
-            hide_index=True
-        )
-        
-        # Display summary metrics
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Total Volume", f"{summary_metrics['total_volume']:,.0f}")
-        with col2:
-            st.metric("Avg IV", f"{summary_metrics['avg_iv']:.1%}")
-        with col3:
-            st.metric("Data Points", consensus_data.get('data_points', 'N/A'))
-    else:
-        st.warning("No liquid options found for analysis.")
-
 # vol surface iff options data non-empty
 st.subheader(f" {selected_ticker} Volatility Surface")
 if calc_df is not None:
@@ -224,6 +193,26 @@ if calc_df is not None:
     
 else:
     st.info("Unable to create volatility surface. Try selecting a ticker with more options data.")
+
+# Display liquidity analysis using the same data as options table
+if calc_df is not None and not calc_df.empty:
+    # Get top 3 most liquid options from calc_df
+    top_liquid = get_top_liquid_options(calc_df, top_n=3)
+    
+    if top_liquid is not None and not top_liquid.empty:
+        formatted_liquid, summary_metrics = format_top_liquid_options(top_liquid)
+        insights = get_liquidity_insights(summary_metrics)
+        
+        # Display insights
+        st.info(f"**Liquidity Insights**: {insights}")
+        
+        # Display top liquid options table
+        st.subheader("Most Liquid Options")
+        st.dataframe(
+            formatted_liquid,
+            use_container_width=True,
+            hide_index=True
+        )
 
 # display chart
 with st.expander(label='Toggle chart', expanded=True):
@@ -241,14 +230,3 @@ with st.expander("Toggle options data"):
             )
         else:
             st.info("No options data available for the selected ticker.")
-
-# Add 2D Volatility Plot section
-"""st.subheader(f"{selected_ticker} 2D Volatility Plot")
-if filtered_df is not None and not filtered_df.empty:
-    fig, _ = plot_vol_2d(filtered_df, selected_ticker, current_prices)
-    if fig is not None:
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Unable to create 2D volatility plot for the selected ticker.")
-else:
-    st.info("No data available for 2D volatility plot.")"""
