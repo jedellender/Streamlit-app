@@ -11,6 +11,7 @@ from data_fetcher import fetch_options_data, get_clean_options, fetch_data
 from calculations import compute_greeks, display_price_chart, display_price_metrics
 from iv_plotting import create_vol_surface, display_vol_surface_metrics, plot_dual_population_skew, plot_vol_2d
 from liquidity_analysis import get_top_liquid_options, format_top_liquid_options, get_liquidity_insights
+from iv_solver import iv_calc_robust
 st.set_page_config(page_title="Compact Multi-Ticker Dashboard", layout="wide")
 
 # init sidebar
@@ -47,17 +48,18 @@ with st.sidebar:
      # Load data based on toggle state
     if on:
         options_df = pd.DataFrame()
-        backup_liquid_options = [ "Backup_liquid_options/amd_2025-09-10T19-10_export.csv",
-        "Backup_liquid_options/ionq_2025-09-10T19-10_export.csv",
-        "Backup_liquid_options/spy_2025-09-10T19-10_export.csv",
-        "Backup_liquid_options/tsla_2025-09-10T19-10_export.csv" ]
+        backup_liquid_options = ["Backup_liquid_options/amd_2025-09-23T13-29_export.csv",
+        "Backup_liquid_options/ionq_2025-09-23T13-30_export.csv",
+        "Backup_liquid_options/spy_2025-09-23T13-29_export.csv",
+        "Backup_liquid_options/tsla_2025-09-23T13-30_export.csv" ]
+        
         
         # hardcode stock price at time of export for moneyness calc
         backup_historical_prices = {
-            "AMD": 159.54,
-            "IONQ": 43.86,
-            "SPY": 652.21,
-            "TSLA": 347.79
+            "AMD": 159.79,
+            "IONQ": 71.94,
+            "SPY": 666.84,
+            "TSLA": 434.21
         }
 
         for backup_export in backup_liquid_options:
@@ -69,7 +71,7 @@ with st.sidebar:
     else:
         options_df = fetch_options_data(tickers)
     st.markdown("###### (*Live data may be unavailable outside of US market hours)")
-    st.markdown("###### (**Example data/options chain as of 10/09/2025)")
+    st.markdown("###### (**default tickers option chains as of 23/09/2025)")
     
 
 
@@ -129,17 +131,20 @@ v_max = 2 # st.slider('Max vol', 0, 300)
 filtered_df = None # init filtered df.
 
 # process options data post selection of live / example data
+# Process options data post selection of live / example data
 if options_df is not None and not options_df.empty:
     clean_options_df = get_clean_options(options_df, current_prices, t_max, v_max, on=on)
 
-    # Use yfinance IV directly (more reliable than solver)
-    # clean_options_df = iv_calc(clean_options_df)  # DISABLED - using market IV instead
+    # Only recalculate IV for live data
+    if not on:  # on=False means live data
+        clean_options_df = iv_calc_robust(clean_options_df)  # Use custom IV calculation
+    # else: backup data already has IV from when it was saved!
 
     # compute greeks
-    greeks_df = compute_greeks(clean_options_df) 
+    greeks_df = compute_greeks(clean_options_df)
 
     # filter for selected ticker and sort by volume
-    filtered_df = greeks_df[ greeks_df['ticker'] == selected_ticker ].sort_values('volume', ascending=False)
+    filtered_df = greeks_df[greeks_df['ticker'] == selected_ticker].sort_values('volume', ascending=False)
     
     # ensure cols are numeric
     numeric_cols = [
@@ -153,8 +158,8 @@ if options_df is not None and not options_df.empty:
     formatted_df = filtered_df.style.format({
         "expirationDate": lambda x: x.strftime('%d/%m/%y') if pd.notna(x) else "",
         "strike": "${:.2f}",
-        "volume":"{:.2f}",
-        "impliedVolatility": "{:.1%}",    
+        "volume": "{:.2f}",
+        "impliedVolatility": "{:.1%}",
         "percentChange": "{:.2f}%",
         "lastPrice": "${:.3f}",
         "change": "${:.2f}",
@@ -164,14 +169,14 @@ if options_df is not None and not options_df.empty:
         "vega": "{:.4f}",
         "rho": "{:.4f}",
         "moneyness": "{:.3f}",
-        "intrinsic_value":"{:.2f}",
+        "intrinsic_value": "{:.2f}",
         "bid": "${:.2f}",
         "ask": "${:.2f}",
         "bid_ask_spread": "${:.2f}",
         "bid_ask_spread_pct": "{:.2f}%"
     })
 
-# make copy of filtered options dataframe for calculations
+    # make copy of filtered options dataframe for calculations
     calc_df = filtered_df.copy()
 
 # volatility smile (skew) - 2D plot

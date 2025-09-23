@@ -120,12 +120,12 @@ def get_clean_options(options_df, current_prices, t_max, v_max=2, on=False):
     # Handle date conversion
     if 'expirationDate' in c_df.columns:
         c_df['expirationDate'] = pd.to_datetime(c_df['expirationDate'], errors='coerce')
-    
-    # Calculate days to expiry
-    today = pd.Timestamp.now()
-    c_df['days_to_expiry'] = (c_df['expirationDate'] - today).dt.days
-    c_df['time_to_expiry'] = c_df['days_to_expiry'] / 365.0
 
+    # Calculate time to expiry
+    c_df['time_to_expiry'] = (
+    (c_df['expirationDate'] - pd.Timestamp.now()) / pd.Timedelta(days=252)
+)
+    
     # add bid ask spread and pct
     c_df['bid_ask_spread'] = c_df['ask'] - c_df['bid']
     c_df['bid_ask_spread_pct'] = (c_df['bid_ask_spread'] / c_df['lastPrice']) * 100
